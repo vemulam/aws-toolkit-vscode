@@ -5,9 +5,12 @@
 
 import { Lambda } from 'aws-sdk'
 import { _Blob } from 'aws-sdk/clients/lambda'
+import * as fs from 'fs'
+import * as path from 'path'
 import { ext } from '../extensionGlobals'
 import '../utilities/asyncIteratorShim'
 import { LambdaClient } from './lambdaClient'
+import { fileExists } from '../filesystemUtilities'
 
 export class DefaultLambdaClient implements LambdaClient {
     public constructor(public readonly regionCode: string) {}
@@ -53,6 +56,25 @@ export class DefaultLambdaClient implements LambdaClient {
 
             request.Marker = response.NextMarker
         } while (!!request.Marker)
+    }
+
+    public async updateFunctionCode(functionName: string, zip: string): Promise<void> {
+        const client = await this.createSdkClient()
+
+        if (!(await fileExists(zip)) || path.extname(zip) !== '.zip') {
+            throw new Error('Zipfile does not exist')
+        }
+
+        const response = await client
+            .updateFunctionCode({
+                FunctionName: functionName,
+                ZipFile: fs.readFileSync(zip),
+            })
+            .promise()
+
+        if (response.$response.error) {
+            throw response.$response.error
+        }
     }
 
     private async createSdkClient(): Promise<Lambda> {

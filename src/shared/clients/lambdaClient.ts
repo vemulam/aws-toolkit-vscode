@@ -14,4 +14,6 @@ export interface LambdaClient {
     invoke(name: string, payload?: _Blob): Promise<Lambda.InvocationResponse>
 
     listFunctions(): AsyncIterableIterator<Lambda.FunctionConfiguration>
+
+    updateFunctionCode(functionName: string, zip: string): Promise<void>
 }
