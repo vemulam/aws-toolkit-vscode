@@ -69,7 +69,7 @@ export async function activate(ctx: ExtContext): Promise<void> {
     ctx.extensionContext.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration(configurationChangeEvent => {
             if (configurationChangeEvent.affectsConfiguration('aws.samcli.location')) {
-                detectSamCli({ passive: true, showMessage: undefined })
+                detectSamCli({ passive: true, showMessage: true })
             }
         })
     )

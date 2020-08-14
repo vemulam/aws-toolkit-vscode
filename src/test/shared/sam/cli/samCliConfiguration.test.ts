@@ -108,7 +108,7 @@ describe('SamCliConfiguration', () => {
 
         await samCliConfig.initialize()
 
-        assert.strictEqual(samCliConfig.getSamCliLocation(), undefined)
+        assert.strictEqual(samCliConfig.getSamCliLocation(), '')
     })
 
     function createSampleFile(filename: string): void {

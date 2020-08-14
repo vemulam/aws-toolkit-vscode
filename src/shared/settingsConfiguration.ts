@@ -6,10 +6,8 @@
 import * as vscode from 'vscode'
 import { getLogger } from './logger'
 
-/**
- * Wraps the VSCode configuration API and provides Toolkit-related
- * configuration functions.
- */
+// defines helper methods for interacting with VSCode's configuration
+// persistence mechanisms, allowing us to test with mocks.
 export interface SettingsConfiguration {
     readSetting<T>(settingKey: string): T | undefined
     readSetting<T>(settingKey: string, defaultValue: T): T
