@@ -11,7 +11,6 @@ import { extensionSettingsPrefix, samAboutInstallUrl } from '../../constants'
 import { DefaultSettingsConfiguration } from '../../settingsConfiguration'
 import { DefaultSamCliConfiguration, SamCliConfiguration } from './samCliConfiguration'
 import { DefaultSamCliLocationProvider } from './samCliLocator'
-import { getLogger } from '../../logger'
 
 const localize = nls.loadMessageBundle()
 const lock = new AsyncLock()
@@ -34,22 +33,12 @@ export async function detectSamCli(args: { passive: boolean; showMessage: boolea
             new DefaultSamCliLocationProvider()
         )
 
-        const valueBeforeInit = samCliConfig.getSamCliLocation()
-        getLogger().error('xxx detectSamCli 1: %O', valueBeforeInit)
-
         // NOTE: We must NOT "auto-update" the user's configuration, that
         // conflicts with VSCode _remote_ feature: each VSCode instance will
         // update the setting based on its local environment, but the user
         // settings are shared across VSCode instances.
         const sam = await samCliConfig.getOrDetectSamCli()
-
         const notFound = sam.path === ''
-        getLogger().error(
-            'xxx detectSamCli 2: %O, args.showMessage=%O, failedSamAutoDetection=%O',
-            sam.path,
-            args.showMessage,
-            notFound
-        )
 
         if (args.showMessage !== false || notFound) {
             if (notFound) {
