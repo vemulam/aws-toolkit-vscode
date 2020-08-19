@@ -2,7 +2,6 @@ version: 0.2
 env:
     variables:
         AWS_TOOLKIT_TEST_NO_COLOR: '1'
-        VSCODE_TEST_VERSION: '1.46.0' # TODO: Remove when we resolve debugger issues with Windows tests
 phases:
     install:
         commands:
@@ -10,6 +9,13 @@ phases:
                 if(-Not($Env:CODE_COV_TOKEN -eq $null)) {
                     choco install -y --no-progress codecov
                 }
+            # Install getmac to avoid spurious "Command failed: getmac.exe"
+            # error in the build logs. https://github.com/microsoft/vscode/issues/102428
+            - |
+                &python --version
+                &pip --version
+                &pip install getmac
+                &getmac --version
     pre_build:
         commands:
             - npm install
