@@ -63,16 +63,18 @@ import { CredentialsStore } from './credentials/credentialsStore'
 let localize: nls.LocalizeFunc
 
 function setGlobalErrorHandlers(logger: Logger, channelLogger: ChannelLogger) {
-    process.on('uncaughtException', e => {
-        logger.error('uncaughtException: %O', e as Error)
+    process.on('uncaughtException', err => {
+        const e = err as Error
+        logger.error('uncaughtException: %s: %O\nstacktrace:\n%O', e.name, e.message, e.stack)
         channelLogger.error('AWS.channel.aws.toolkit', 'AWS Toolkit', e as Error)
         if (e !== undefined) {
             throw e
         }
     })
 
-    process.on('unhandledRejection', e => {
-        logger.error('unhandledRejection: %O', e as Error)
+    process.on('unhandledRejection', err => {
+        const e = err as Error
+        logger.error('unhandledRejection: %s: %O\nstacktrace:\n%O', e.name, e.message, e.stack)
         channelLogger.error('AWS.channel.aws.toolkit', 'AWS Toolkit', e as Error)
         if (e !== undefined) {
             throw e
