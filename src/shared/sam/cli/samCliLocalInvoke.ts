@@ -81,17 +81,21 @@ export class DefaultSamLocalInvokeCommand implements SamLocalInvokeCommand {
                     }
                 },
                 onClose: (code: number, _: string): void => {
-                    this.logger.verbose(`The child process for sam local invoke closed with code ${code}`)
+                    this.logger.verbose(`samCliLocalInvoke: process exited (code: ${code}): ${childProcess}`)
                     this.channelLogger.channel.appendLine(
                         localize('AWS.samcli.local.invoke.ended', 'Local invoke of SAM Application has ended.')
                     )
 
-                    // Handles scenarios where the process exited before we anticipated.
-                    // Example: We didn't see an expected debugger attach cue, and the process or docker container
-                    // was terminated by the user, or the user manually attached to the sam app.
-                    if (!debuggerPromiseClosed) {
+                    // Process ended unexpectedly, but successfully.
+                    // Example: We didn't see an expected debugger attach cue,
+                    // and the process or docker container was terminated by
+                    // the user, or the user manually attached to the sam app.
+                    if (!debuggerPromiseClosed && code === 0) {
                         debuggerPromiseClosed = true
-                        reject(new Error('The SAM Application closed unexpectedly'))
+                        resolve()
+                    } else if (code !== 0) {
+                        debuggerPromiseClosed = true
+                        reject(new Error(`"sam local invoke" process stopped unexpectedly (error code: ${code})`))
                     }
                 },
                 onError: (error: Error): void => {
