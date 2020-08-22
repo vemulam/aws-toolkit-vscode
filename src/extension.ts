@@ -36,7 +36,7 @@ import {
     showQuickStartWebview,
     showWelcomeMessage,
 } from './shared/extensionUtilities'
-import { getLogger, Logger } from './shared/logger'
+import { getLogger, setLogger, setMaxLogging, Logger } from './shared/logger/logger'
 import { activate as activateLogger } from './shared/logger/activation'
 import { DefaultRegionProvider } from './shared/regions/defaultRegionProvider'
 import { EndpointsProvider } from './shared/regions/endpointsProvider'
@@ -62,7 +62,7 @@ import { CredentialsStore } from './credentials/credentialsStore'
 
 let localize: nls.LocalizeFunc
 
-function setGlobalErrorHandlers(logger: Logger, channelLogger: ChannelLogger) {
+export function setGlobalErrorHandlers(logger: Logger, channelLogger: ChannelLogger) {
     process.on('uncaughtException', err => {
         const e = err as Error
         logger.error('uncaughtException: %s: %O\nstacktrace:\n%O', e.name, e.message, e.stack)
@@ -82,7 +82,7 @@ function setGlobalErrorHandlers(logger: Logger, channelLogger: ChannelLogger) {
     })
 }
 
-export async function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext): Promise<any> {
     const activationStartedOn = Date.now()
 
     localize = nls.loadMessageBundle()
@@ -92,7 +92,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const toolkitOutputChannel = vscode.window.createOutputChannel(localize('AWS.channel.aws.toolkit', 'AWS Toolkit'))
     const channelLogger = getChannelLogger(toolkitOutputChannel)
     ext.outputChannel = toolkitOutputChannel
-    setGlobalErrorHandlers(getLogger(), channelLogger)
+    // setGlobalErrorHandlers(getLogger(), channelLogger)
 
     try {
         initializeCredentialsProviderManager()
@@ -238,6 +238,16 @@ export async function activate(context: vscode.ExtensionContext) {
         await loginWithMostRecentCredentials(toolkitSettings, loginManager)
 
         recordToolkitInitialization(activationStartedOn, getLogger())
+
+        console.log(`xxx activate END PID=${process.pid} getLogger()${getLogger()}`)
+
+        let publicApi = {
+            setLogger: setLogger,
+            getLogger: getLogger,
+            setMaxLogging: setMaxLogging,
+        }
+
+        return publicApi
     } catch (error) {
         channelLogger.error('AWS.channel.aws.toolkit.activation.error', 'Error Activating AWS Toolkit', error as Error)
         throw error

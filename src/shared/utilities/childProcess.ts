@@ -124,6 +124,6 @@ export class ChildProcess {
     }
 
     public toString(): string {
-        return JSON.stringify([this.process, ...this.args])
+        return `[${this.process} ${this.args.join(' ')}]`
     }
 }

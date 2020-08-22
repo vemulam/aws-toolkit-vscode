@@ -39,6 +39,9 @@ export interface SamLocalInvokeCommand {
 
 export class DefaultSamLocalInvokeCommand implements SamLocalInvokeCommand {
     private readonly logger: Logger = getLogger()
+    // Incrementing id useful for correlating log messages.
+    private static id = 0
+    private id = 0
 
     public constructor(
         private readonly channelLogger: ChannelLogger,
@@ -46,18 +49,24 @@ export class DefaultSamLocalInvokeCommand implements SamLocalInvokeCommand {
             WAIT_FOR_DEBUGGER_MESSAGES.PYTHON,
             WAIT_FOR_DEBUGGER_MESSAGES.NODEJS,
         ]
-    ) {}
+    ) {
+        DefaultSamLocalInvokeCommand.id += 1
+        this.id = DefaultSamLocalInvokeCommand.id
+    }
+
+    private log(o: any) {
+        const msg = `XXX SamLocalInvokeCommand ${this.id}: ${JSON.stringify(o)}`
+        this.emitMessage(msg)
+        getLogger().debug(msg)
+    }
 
     public async invoke({ options, ...params }: SamLocalInvokeCommandArgs): Promise<void> {
-        this.channelLogger.info(
-            'AWS.running.command',
-            'Running command: {0}',
-            `${params.command} ${params.args.join(' ')}`
-        )
-
         const childProcess = new ChildProcess(params.command, options, ...params.args)
+        this.channelLogger.info('AWS.running.command', 'Running command: {0}', `${childProcess}`)
+        this.log(`starting: ${childProcess}`)
+
         let debuggerPromiseClosed: boolean = false
-        const debuggerPromise = new Promise<void>(async (resolve, reject) => {
+        const debuggerPromise = new Promise<number>(async (resolve, reject) => {
             let checkForDebuggerAttachCue: boolean = params.isDebug && this.debuggerAttachCues.length !== 0
 
             await childProcess.start({
@@ -76,26 +85,28 @@ export class DefaultSamLocalInvokeCommand implements SamLocalInvokeCommand {
                             checkForDebuggerAttachCue = false
                             this.logger.verbose('Local SAM App should be ready for a debugger to attach now.')
                             debuggerPromiseClosed = true
+                            // Process will continue running, while user debugs it.
                             resolve()
                         }
                     }
                 },
                 onClose: (code: number, _: string): void => {
-                    this.logger.verbose(`samCliLocalInvoke: process exited (code: ${code}): ${childProcess}`)
+                    this.logger.verbose(`samCliLocalInvoke: command exited (code: ${code}): ${childProcess}`)
                     this.channelLogger.channel.appendLine(
                         localize('AWS.samcli.local.invoke.ended', 'Local invoke of SAM Application has ended.')
                     )
 
-                    // Process ended unexpectedly, but successfully.
-                    // Example: We didn't see an expected debugger attach cue,
-                    // and the process or docker container was terminated by
-                    // the user, or the user manually attached to the sam app.
-                    if (!debuggerPromiseClosed && code === 0) {
+                    // Process ended without emitting a known "cue" message.
+                    // Possible causes:
+                    // - User killed Docker or the process directly.
+                    // - User manually attached before we found a "cue" message.
+                    // - We need to update the list of "cue" messages.
+                    if (code === 0) {
                         debuggerPromiseClosed = true
                         resolve()
                     } else if (code !== 0) {
                         debuggerPromiseClosed = true
-                        reject(new Error(`"sam local invoke" process stopped unexpectedly (error code: ${code})`))
+                        reject(new Error(`"sam local invoke" command stopped unexpectedly (error code: ${code})`))
                     }
                 },
                 onError: (error: Error): void => {
@@ -117,7 +128,9 @@ export class DefaultSamLocalInvokeCommand implements SamLocalInvokeCommand {
 
         const awaitedPromises = params.timeout ? [debuggerPromise, params.timeout.timer] : [debuggerPromise]
 
-        await Promise.race(awaitedPromises).catch(async () => {
+        await Promise.race(awaitedPromises).catch(async reason => {
+            this.log(`command failed: ${params.command}): ${reason}`)
+
             // did debugger promise resolve/reject? if not, this was a timeout: kill the process
             // otherwise, process closed out on its own; no need to kill the process
             if (!debuggerPromiseClosed) {
