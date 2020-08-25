@@ -139,6 +139,11 @@ function skippedMsg(prefix: string, session: any) {
 
 describe('SAM Integration Tests', async () => {
     const samApplicationName = 'testProject'
+    /**
+     * Breadcrumbs from each process, printed at end of all scenarios to give
+     * us an idea of the timeline.
+     */
+    const sessionLog: string[] = []
     let testSuiteRoot: string
 
     before(async function() {
@@ -156,6 +161,9 @@ describe('SAM Integration Tests', async () => {
 
     after(async () => {
         tryRemoveFolder(testSuiteRoot)
+        // Print a summary of session that were seen by `onDidStartDebugSession`.
+        const sessionReport = `\n    ${sessionLog.join('\n    ')}\n`
+        console.log(`DebugSessions seen in this run:${sessionReport}`)
     })
 
     for (let scenarioIndex = 0; scenarioIndex < scenarios.length; scenarioIndex++) {
@@ -282,7 +290,11 @@ describe('SAM Integration Tests', async () => {
                     assert.strictEqual(
                         vscode.debug.activeDebugSession,
                         undefined,
-                        'unexpected debug session in progress'
+                        `unexpected debug session in progress: ${JSON.stringify(
+                            vscode.debug.activeDebugSession,
+                            undefined,
+                            2
+                        )}`
                     )
 
                     const testConfig = {
@@ -305,15 +317,23 @@ describe('SAM Integration Tests', async () => {
                         // debuggers exit without triggering `onDidStartDebugSession`.
                         if (runtimeNeedsWorkaround(scenario.language)) {
                             testDisposables.push(
-                                vscode.debug.onDidTerminateDebugSession(async debugSession => {
+                                vscode.debug.onDidTerminateDebugSession(session => {
+                                    sessionLog.push(
+                                        `scenario ${scenarioIndex} (END) (runtime=${scenario.runtime}) ${session.name}`
+                                    )
                                     resolve()
                                 })
                             )
                         }
                         testDisposables.push(
                             vscode.debug.onDidStartDebugSession(async startedSession => {
+                                sessionLog.push(
+                                    `scenario ${scenarioIndex} (START) (runtime=${scenario.runtime}) ${startedSession.name}`
+                                )
+
                                 // If `onDidStartDebugSession` is fired then the debugger doesn't need the workaround anymore.
                                 if (runtimeNeedsWorkaround(scenario.language)) {
+                                    await stopDebugger(startedSession)
                                     reject(
                                         new Error(
                                             `runtime "${scenario.language}" triggered onDidStartDebugSession, so it can be removed from runtimeNeedsWorkaround(), yay!`
@@ -326,16 +346,6 @@ describe('SAM Integration Tests', async () => {
                                     return
                                 }
 
-                                const sessionValidation = validateSamDebugSession(
-                                    startedSession,
-                                    scenario.debugSessionType
-                                )
-
-                                if (sessionValidation) {
-                                    await stopDebugger(startedSession)
-                                    reject(new Error(sessionValidation))
-                                }
-
                                 // Wait for this debug session to terminate
                                 testDisposables.push(
                                     vscode.debug.onDidTerminateDebugSession(async endedSession => {
@@ -344,42 +354,28 @@ describe('SAM Integration Tests', async () => {
                                             return
                                         }
 
-                                        function failMsg(expected: string): string {
-                                            return (
-                                                `Unexpected debug session (expected ${expected}):` +
-                                                `\n${JSON.stringify(endedSession)}`
-                                            )
-                                        }
-                                        const endSessionValidation = validateSamDebugSession(
-                                            endedSession,
-                                            scenario.debugSessionType
+                                        sessionLog.push(
+                                            `scenario ${scenarioIndex} (END) (runtime=${scenario.runtime}) ${endedSession.name}`
                                         )
-                                        if (endSessionValidation) {
-                                            reject(new Error(endSessionValidation))
+                                        const sessionRuntime = (endedSession.configuration as any).runtime
+                                        if (!sessionRuntime) {
+                                            // It's a coprocess, ignore it.
+                                            return
                                         }
-                                        if (scenario.runtime === 'nodejs10.x') {
-                                            // nodejs10.x starts a coprocess for some reason, so we can't compare `id`.
-                                            // Instead just check that it looks like a SAM debugconfig.
-                                            const isSamDebug = !!(endedSession.configuration as any).templatePath
-                                            const isNode10x =
-                                                (endedSession.configuration as any).runtime === 'nodejs10.x'
-                                            if (isSamDebug && isNode10x) {
-                                                resolve()
-                                            } else {
-                                                reject(new Error(failMsg(`runtime=nodejs10.x`)))
-                                            }
-                                        } else if (startedSession.id === endedSession.id) {
-                                            resolve()
-                                        } else {
-                                            reject(new Error(failMsg(`id=${startedSession.id}`)))
+                                        const failMsg = validateSamDebugSession(endedSession, scenario.runtime)
+                                        if (failMsg) {
+                                            reject(new Error(failMsg))
                                         }
+                                        resolve()
                                     })
                                 )
 
-                                // wait for it to actually start (which we do not get an event for). 800 is
-                                // short enough to finish before the next test is run and long enough to
-                                // actually act after it pauses
-                                await sleep(800)
+                                // Wait for it to actually start (which we do not get an event for).
+                                await sleep(400)
+                                await continueDebugger()
+                                await sleep(400)
+                                await continueDebugger()
+                                await sleep(400)
                                 await continueDebugger()
                             })
                         )
@@ -403,18 +399,18 @@ describe('SAM Integration Tests', async () => {
         }
 
         /**
-         * Returns a string if there is a validation issue, undefined if there is no issue
+         * Returns a string if there is a validation issue, undefined if there is no issue.
          */
         function validateSamDebugSession(
             debugSession: vscode.DebugSession,
-            expectedSessionType: string
+            expectedRuntime: string
         ): string | undefined {
-            if (!debugSession.name.startsWith('SamLocalDebug')) {
-                return `Unexpected DebugSession name: ${debugSession}:\n${JSON.stringify(debugSession)}`
-            }
-
-            if (debugSession.type !== expectedSessionType) {
-                return `Unexpected DebugSession type: ${debugSession.type}:\n${JSON.stringify(debugSession)}`
+            const runtime = (debugSession.configuration as any).runtime
+            if (runtime !== expectedRuntime) {
+                const failMsg =
+                    `Unexpected DebugSession (expected runtime=${expectedRuntime}):` +
+                    `\n${JSON.stringify(debugSession)}`
+                return failMsg
             }
         }
 
