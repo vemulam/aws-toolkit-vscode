@@ -33,6 +33,10 @@ async function setupVSCode(): Promise<string> {
             vscodeExecutablePath: vsCodeExecutablePath,
             extensionDevelopmentPath: cwd,
             extensionTestsPath: testEntrypoint,
+            // TODO: we should really use `--disable-extensions` here (avoids
+            // bad interactions with random extensions on your local machine),
+            // but need to find out how to selectively enable some extensions
+            // (those listed in VSCODE_EXTENSION_ID).
             launchArgs: [workspacePath],
         })
 

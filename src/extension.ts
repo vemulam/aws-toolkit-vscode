@@ -55,32 +55,12 @@ import {
     recordToolkitInit,
 } from './shared/telemetry/telemetry'
 import { ExtensionDisposableFiles } from './shared/utilities/disposableFiles'
-import { getChannelLogger, ChannelLogger } from './shared/utilities/vsCodeUtils'
+import { getChannelLogger } from './shared/utilities/vsCodeUtils'
 import { ExtContext } from './shared/extensions'
 import { activate as activateStepFunctions } from './stepFunctions/activation'
 import { CredentialsStore } from './credentials/credentialsStore'
 
 let localize: nls.LocalizeFunc
-
-export function setGlobalErrorHandlers(logger: Logger, channelLogger: ChannelLogger) {
-    process.on('uncaughtException', err => {
-        const e = err as Error
-        logger.error('uncaughtException: %s: %O\nstacktrace:\n%O', e.name, e.message, e.stack)
-        channelLogger.error('AWS.channel.aws.toolkit', 'AWS Toolkit', e as Error)
-        if (e !== undefined) {
-            throw e
-        }
-    })
-
-    process.on('unhandledRejection', err => {
-        const e = err as Error
-        logger.error('unhandledRejection: %s: %O\nstacktrace:\n%O', e.name, e.message, e.stack)
-        channelLogger.error('AWS.channel.aws.toolkit', 'AWS Toolkit', e as Error)
-        if (e !== undefined) {
-            throw e
-        }
-    })
-}
 
 export async function activate(context: vscode.ExtensionContext): Promise<any> {
     const activationStartedOn = Date.now()
@@ -92,7 +72,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<any> {
     const toolkitOutputChannel = vscode.window.createOutputChannel(localize('AWS.channel.aws.toolkit', 'AWS Toolkit'))
     const channelLogger = getChannelLogger(toolkitOutputChannel)
     ext.outputChannel = toolkitOutputChannel
-    // setGlobalErrorHandlers(getLogger(), channelLogger)
 
     try {
         initializeCredentialsProviderManager()
